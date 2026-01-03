@@ -1,11 +1,7 @@
+import { dbConnect } from "@/lib/dbConnect";
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-
-const users = [
-	{ name: "hablu", password: "1234" },
-	{ name: "dablu", password: "5678" },
-	{ name: "bablu", password: "9101" },
-];
+import bcrypt from "bcryptjs";
 
 export const authOptions = {
 	// Configure one or more authentication providers
@@ -15,26 +11,30 @@ export const authOptions = {
 			name: "Credentials",
 			// form inputs
 			credentials: {
-				username: {
-					label: "Username",
-					type: "text",
-					placeholder: "jsmith",
+				email: {
+					label: "Email",
+					type: "email",
+					placeholder: "montu@mia.com",
 				},
-				password: { label: "Password", type: "password" },
-				secretCode: {
-					label: "Secret Code",
-					type: "number",
-					placeholder: "Enter your secret code",
+				password: {
+					label: "Password",
+					type: "password",
+					placeholder: "Enter Your Password",
 				},
 			},
 			async authorize(credentials, req) {
 				// my own login logic
-				const { username, password, secretCode } = credentials;
+				const { email, password } = credentials;
 
-				const user = users.find((u) => u.name == username);
+				// const user = users.find((u) => u.name == username);
+				const user = await dbConnect("users").findOne({ email });
+
 				if (!user) return null;
 
-				const isPasswordOk = user.password == password;
+				const isPasswordOk = await bcrypt.compare(
+					password,
+					user.password
+				);
 
 				if (isPasswordOk) {
 					return user;
@@ -46,6 +46,28 @@ export const authOptions = {
 		}),
 		// ...add more providers here
 	],
+
+	callbacks: {
+		async signIn({ user, account, profile, email, credentials }) {
+			return true;
+		},
+		async redirect({ url, baseUrl }) {
+			return baseUrl;
+		},
+		async session({ session, token, user }) {
+			if (token) {
+				session.role = token.role;
+			}
+			return session;
+		},
+		async jwt({ token, user, account, profile, isNewUser }) {
+			if (user) {
+				token.email = user.email;
+				token.role = user.role;
+			}
+			return token;
+		},
+	},
 };
 
 const handler = NextAuth(authOptions);
